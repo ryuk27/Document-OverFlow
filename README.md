@@ -23,6 +23,8 @@ This setup shows how a vulnerable server running on a Windows machine is exploit
 ## Step 1: Starting vulnserver with Immunity Debugger
 
 I started off by running the `vulnserver.exe` file on the Windows machine. Then I opened up Immunity Debugger, attached it to `vulnserver.exe`, and hit the play button (F9) to get it running. Now the debugger was all set and waiting to catch any crashes when the exploit hits.
+[VulnServer](poc/step1a.png)
+[Immunity Debugger](poc/step1b.png)
 
 ## Step 2: Connecting to the Vulnerable Server
 
