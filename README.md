@@ -152,4 +152,4 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
  ![Netcat](poc/step11b.png)
 - Then executed the `shellcode.py` script from the terminal. Switched back to the Netcat terminal to monitor incoming connection.
 - Saw that shell access to the target vulnerable Windows server was successfully established. The reverse shell was now active.
-- ![Access](poc/step11c.png)
+ ![Access](poc/step11c.png)
