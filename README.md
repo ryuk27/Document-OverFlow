@@ -41,7 +41,7 @@ After setting everything up, I opened a terminal on the Parrot machine and conne
  ![Terminal](poc/step3b.png)
 - `<IP>` is the target system, `9999` is the port, and `0 0` are spike parameters.
 - Switched to Immunity Debugger and saw the process had paused.
- ![Pause](poc/step3.png)
+ ![Pause](poc/step3c.png)
 - EAX, ESP, EBP, and EIP registers were overwritten with "A".
 - This confirmed the TRUN function has a buffer overflow issue.
 - Pressed `Ctrl+Z` on Parrot to stop the running spike command.
